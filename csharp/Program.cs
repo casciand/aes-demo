@@ -1,4 +1,5 @@
-﻿using System.Security.Cryptography;
+﻿using System;
+using System.Security.Cryptography;
 using System.Text;
 
 class Program
@@ -50,7 +51,7 @@ class Program
             RSAEncrypt(ByteConverter.GetBytes(plaintext), Program.publicKey);
         } else {
             byte[] recovered = RSADecrypt(Program.privateKey);
-            Console.WriteLine("Recovered plaintext: {0}", ByteConverter.GetString(recovered));
+            Console.WriteLine("Recovered plaintext: {0}", Encoding.UTF8.GetString(recovered));
         }
 
         return 0;
