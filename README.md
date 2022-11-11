@@ -45,34 +45,20 @@ cmake --build .
 
 # Run
 
-## C#
-
-Run the following commands in the `csharp` directory.
-
-Encrypt a message:
-
-```commandline
-dotnet build 1
-```
-
-Decrypt a message:
-
-```commandline
-dotnet build 2
-```
-
 ## C++
 
-Run the following commands in the `cpp\build\Debug` directory (or wherever the executable resides).
-
-Encrypt a message:
+Start the server by running the executable in the `cpp\build\Debug` directory (or wherever the executable resides).
 
 ```commandline
-.\cpp.exe 1
+.\cpp.exe
 ```
 
-Decrypt a message:
+## C#
+
+Start the client by running the following command in the `csharp` directory.
 
 ```commandline
-.\cpp.exe 2
+dotnet run
 ```
+
+After the connection establishes, send encrypted messages to the server from the prompt.
