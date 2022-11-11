@@ -1,4 +1,7 @@
+#include "cryptlib.h"
 #include "rsa.h"
+#include "rijndael.h"
+#include "modes.h"
 #include "files.h"
 #include "osrng.h"
 #include "hex.h"
@@ -7,105 +10,245 @@
 #include <fstream>
 #include <filesystem>
 #include <string>
+#include <winsock2.h>
+#include <ws2tcpip.h>
+
+#pragma comment (lib, "ws2_32.lib")
 
 using namespace CryptoPP;
 
-std::string separator() {
-    #ifdef _WIN32
-        return "\\";
-    #else
-        return "/";
-    #endif
-}
+// class to encrypt symmetric key for client/server session
+class RSAEncryptor {
+public:
+    RSAEncryptor(std::string n, std::string e) {
+		pubKey.Initialize(Integer(n.c_str()), Integer(e.c_str()));
+	}
 
-// constants
-AutoSeededRandomPool rng;
+    std::string encrypt(const std::string& plaintext) {
+		RSAES_OAEP_SHA_Encryptor enc(pubKey);
+		std::string ciphertext, encoded;
+		HexEncoder encoder(new StringSink(encoded));
 
-std::string path = ".." + separator() + ".." + separator() + ".." + separator() + "message.txt";
-const char* FILE_PATH = path.c_str();
+		StringSource ss(plaintext, true,
+			new PK_EncryptorFilter(rng, enc,
+				new StringSink(ciphertext)
+			) // PK_EncryptorFilter
+		); // StringSource
 
-// helper function
-std::string hexToASCII(std::string hex) {
-    std::string ascii;
+		encoder.Put((const byte*) &ciphertext[0], ciphertext.size());
+    	encoder.MessageEnd();
 
-    for (int i = 0; i < hex.length(); i += 2) {
-        ascii += (int) std::stoul(hex.substr(i, 2), nullptr, 16);
-    }
+		return encoded;
+	}
 
-    return ascii;
-}
-
-// encryption/decryption functions
-void RSAEncrypt(const std::string& plaintext) {
-    Integer n("0x9BA04B03B8380EE352323DB2235BC6529E34B5B03D1440F67FAF6055B4900A5DE73ECDD1682260DEA537DBE3D1268468319C348E069456F9A883EA1A17FB0D35");
-    Integer e("0x10001");
-
+private:
+    // member variables
+    AutoSeededRandomPool rng;
     RSA::PublicKey pubKey;
-    pubKey.Initialize(n, e);
 
-    HexEncoder encoder(new FileSink(FILE_PATH), true, 0, ":", "\n");
+    // helper function
+    std::string hexToASCII(const std::string& hex) {
+        std::string ascii;
 
-    RSAES_OAEP_SHA_Encryptor enc(pubKey);
-    std::string ciphertext;
-
-    StringSource ss(plaintext, true,
-        new PK_EncryptorFilter(rng, enc,
-            new StringSink(ciphertext)
-        ) // PK_EncryptorFilter
-    ); // StringSource
-
-    encoder.Put((const byte*) &ciphertext[0], ciphertext.size());
-    encoder.MessageEnd();
-}
-
-std::string RSADecrypt() {
-    std::ifstream file(FILE_PATH);
-    std::string ciphertext;
-    std::string recovered;
-
-    file >> ciphertext;
-
-    Integer n("0xC98D2988771B0C1BFDBDA9147026A4B3856E249224DB027FA45BB1F9931E54D165DC63867BA20F67CBAD46C9685849721EE7A74E237C0E0598EA5FA704EA8165");
-    Integer e("0x10001");
-    Integer d("0x36807FACB158950BB4AFE6DAEA00E924CA7E20518CB9D49123A6D017C71ABAA0725DCFBE98B05D50BDCD81AB4591CA0CE9C4F6540F692EE92156D9FBFEBE0E39");
-    
-    RSA::PrivateKey privKey;
-    privKey.Initialize(n, e, d);
-
-    RSAES_OAEP_SHA_Decryptor dec(privKey);
-
-    StringSource ss(hexToASCII(ciphertext), true,
-        new PK_DecryptorFilter(rng, dec,
-            new StringSink(recovered)
-    ) // PK_DecryptorFilter
-    ); // StringSource
-
-    return recovered;
-}
-
-int main(int argc, char* argv[]) {
-    if (argc != 2) {
-            std::cout << "Expected [1] argument, got [" << argc - 1 << "]." << std::endl;
-            return 1;
-    } else if (strcmp(argv[1], "encrypt") != 0 && strcmp(argv[1], "decrypt") != 0 && strcmp(argv[1], "1") != 0 && strcmp(argv[1], "2") != 0) {
-            std::cout << "Please enter either:\n(1) encrypt\n(2) decrypt" << std::endl;
-            std::cout << argv[1];
-            return 1;
-    } 
-    
-    if (strcmp(argv[1], "1") == 0 || strcmp(argv[1], "encrypt") == 0) {
-        std::string plaintext;
-
-        while (plaintext == "") {
-            std::cout << "Enter a message to encrypt: ";
-            std::getline(std::cin, plaintext);
+        for (int i = 0; i < hex.length(); i += 2) {
+            ascii += (int) std::stoul(hex.substr(i, 2), nullptr, 16);
         }
 
-        RSAEncrypt(plaintext);
-    } else {
-        std::string recovered = RSADecrypt();
-        std::cout << "Recovered plaintext: " << recovered << std::endl;
+        return ascii;
+    }
+};
+
+// class for encrypting and decrypting messages throughout client/server session
+class AESSystem {
+public:
+	AESSystem() : key(AES::MAX_KEYLENGTH), iv(AES::BLOCKSIZE) {
+		rng.GenerateBlock(key, key.size());
+    	rng.GenerateBlock(iv, iv.size());
+	}
+
+	std::string encrypt(const std::string& plaintext) {
+		std::string ciphertext;
+
+		try {
+			CBC_Mode<AES>::Encryption e;
+			e.SetKeyWithIV(key, key.size(), iv);
+
+			StringSource s(plaintext, true, 
+				new StreamTransformationFilter(e,
+					new StringSink(ciphertext)
+				) // StreamTransformationFilter
+			); // StringSource
+		} catch(const Exception& e) {
+			std::cerr << e.what() << std::endl;
+			exit(1);
+		}
+
+		return ciphertext;
+	}
+
+	std::string decrypt(const std::string& ciphertext) {
+		std::string plaintext;
+		SecByteBlock ciphertextBB(reinterpret_cast<const byte*>(&ciphertext[0]), ciphertext.size());
+
+		try {
+			CBC_Mode<AES>::Decryption d;
+			d.SetKeyWithIV(key, key.size(), iv);
+
+			StringSource s(ciphertextBB.BytePtr(), ciphertextBB.size(), true, 
+				new StreamTransformationFilter(d,
+					new StringSink(plaintext)
+				) // StreamTransformationFilter
+			); // StringSource
+		} catch(const Exception& e) {
+			std::cerr << e.what() << std::endl;
+			exit(1);
+		}
+
+		return plaintext;
+	}
+
+	std::string getKey() {
+		std::string keyHex;
+
+		StringSource ss(key.BytePtr(), key.size(), true,
+			new HexEncoder(
+				new StringSink(keyHex)
+			) // HexEncoder
+		); // StringSource
+
+		return keyHex;
+	}
+
+	std::string getIV() {
+		std::string ivHex;
+
+		StringSource ss(iv.BytePtr(), iv.size(), true,
+			new HexEncoder(
+				new StringSink(ivHex)
+			) // HexEncoder
+		); // StringSource
+
+		return ivHex;
+	}
+
+private:
+	AutoSeededRandomPool rng;
+	SecByteBlock key;
+	SecByteBlock iv;
+};
+
+int main(int argc, char* argv[]) {
+    WSADATA wsa;
+	SOCKET s, new_socket;
+	struct sockaddr_in server, client;
+    char buffer[2048];
+
+	if (WSAStartup(MAKEWORD(2,2), &wsa) != 0)
+	{
+		std::cout << std::endl << "Failed to initailize Winsock. Error Code: " << WSAGetLastError() << std::endl;
+		return 1;
+	}
+	
+    std::cout << "Creating socket... ";
+	if ((s = socket(AF_INET , SOCK_STREAM , 0 )) == INVALID_SOCKET)
+	{
+		std::cout << std::endl << "Could not create socket: " << WSAGetLastError() << std::endl;
+	}
+
+	std::cout << "done" << std::endl;
+	
+	// prepare the sockaddr_in structure
+	server.sin_family = AF_INET;
+	server.sin_addr.s_addr = INADDR_ANY;
+	server.sin_port = htons(8080);
+	
+	// bind the socket
+    std::cout << "Binding socket... ";
+	if (bind(s, (struct sockaddr*) &server, sizeof(server)) == SOCKET_ERROR)
+	{
+		std::cout << std::endl << "bind() failed with error code: " << WSAGetLastError() << std::endl;
+	}
+	
+	std::cout << "done" << std::endl;
+	
+	// listen for incoming connections
+	listen(s, 3);
+	std::cout << "Waiting for client... ";
+	
+	int c = sizeof(struct sockaddr_in);
+	new_socket = accept(s, (struct sockaddr *) &client, &c);
+	if (new_socket == INVALID_SOCKET)
+	{
+		std::cout << std::endl << "accept() failed with error code: " << WSAGetLastError() << std::endl;
+	}
+	
+	std::cout << "connected" << std::endl;
+
+    // read in client public key for RSA encryption
+	std::cout << "Reading client public key... ";
+    int len = recv(new_socket, buffer, 2048, 0);
+    if (len == SOCKET_ERROR) {
+        std::cout << std::endl << "Error reading client public key." << std::endl;
+        return 1;
     }
 
-    return 0;
+    buffer[len] = '\0';
+	std::string n(buffer);
+
+	len = recv(new_socket, buffer, 2048, 0);
+    if (len == SOCKET_ERROR) {
+        std::cout << std::endl << "Error reading client public key." << std::endl;
+        return 1;
+    }
+
+    buffer[len] = '\0';
+	std::string e(buffer);
+	std::cout << "done" << std::endl;
+
+	std::cout << "Encrypting and sending AES symmetric key... ";
+	RSAEncryptor encryptor(n, e);
+	AESSystem aes;
+
+	std::string symmetricKey = encryptor.encrypt(aes.getKey());
+	std::string iv = encryptor.encrypt(aes.getIV());
+	// std::cout << std::endl << "Key: " << aes.getKey();
+	// std::cout << std::endl << "Encrypted Key: " << symmetricKey;
+	// std::cout << std::endl << "IV: " << aes.getIV();
+	// std::cout << std::endl << "Encrypted IV: " << iv;
+
+	// send symmetric key and iv
+	if (send(new_socket, symmetricKey.c_str(), symmetricKey.length(), 0) < 0)
+	{
+		std::cout << std::endl << "Error sending symmetric key" << std::endl;
+		return 1;
+	}
+
+	if (send(new_socket, iv.c_str(), iv.length(), 0) < 0)
+	{
+		std::cout << std::endl << "Error sending initialization vector" << std::endl;
+		return 1;
+	}
+
+	std::cout << "done" << std::endl << std::endl;
+
+	// indefinitely read client messages
+	while (true) {
+		len = recv(new_socket, buffer, 2048, 0);
+		if (len == SOCKET_ERROR) {
+			std::cout << std::endl << "Error reading client message." << std::endl;
+			return 1;
+		}
+
+		buffer[len] = '\0';
+		std::string ciphertext(buffer);
+		std::string plaintext(aes.decrypt(ciphertext));
+
+		std::cout << "[Client] " << plaintext << std::endl;
+	}
+
+	closesocket(s);
+	closesocket(new_socket);
+	WSACleanup();
+
+	return 0;
 }

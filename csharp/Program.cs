@@ -1,119 +1,42 @@
-﻿using System;
+﻿using System.Net;
+using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text;
 
-class Program
-{
-
-    const string FILE_PATH = @"..\message.txt";
-
-    static RSAParameters privateKey = new RSAParameters
+class Client {
+	static RSAParameters privateKey = new RSAParameters
     {
-        D = System.Convert.FromHexString("519EEC38F331537D9DEA83B91E1A50159CAC006E825A5107F747BFBAB38CA8226E6808248900F61E5640DF52AEE3BEE3258834194CD63FF2D7D70EABFC5CBD31"),
-        DP = System.Convert.FromHexString("3EF76D8CE01B2EDDFA618F509EDC88CF4D30F2F904FF5AF4699185E6FFFF7E8B"),
-        DQ = System.Convert.FromHexString("9EE81FABEAE7C5E03E82AAD6298245FF3C97F8A40284A75B1A9A70DABBC98071"),
+        D = System.Convert.FromHexString("08407F1C1FD0E0F484A771318F3E1BF97209E3BDCA50FAC55445D4E166963B0F1328C93B1298BEEB44B54441E48468484B7C516517C22A9DC915E6015ED9642E9502B3A14054E7394DF2DD2D17DDC4E81D099686ADB33313D06B58CA4643DB2FC385E03F3D8DB7910A2BBE02975FADF5BD308FD22B464B7FF153BF255DF3C769"),
+        DP = System.Convert.FromHexString("EE3FC90F715FB3CB8EDFC93694F876FA8DC4C006C9EE86DB19C188987DC9DDCDE2296BE0FD8E4909038A34AF2544CB016E1BED2D6C52CB34C34C8710BC90EA31"),
+        DQ = System.Convert.FromHexString("138278242E6D00F3C3696E97550B4AA49F11F07644CC01452AA0C0792E898466D9CCAA8716BCA03BD04DF911F08195A9D04F6456E217558BB9D9AEF52F2E62C9"),
         Exponent = System.Convert.FromHexString("010001"),
-        InverseQ = System.Convert.FromHexString("0BF7CFD35E66522729520AC5D6C249C715228E2CEAE476EC9D1B29DDCD9ECBA7"),
-        Modulus = System.Convert.FromHexString("9BA04B03B8380EE352323DB2235BC6529E34B5B03D1440F67FAF6055B4900A5DE73ECDD1682260DEA537DBE3D1268468319C348E069456F9A883EA1A17FB0D35"),
-        P = System.Convert.FromHexString("C25E529990839011AAF03C9AD952005C1908FC2D62A65344C5ACEA4419FA8217"),
-        Q = System.Convert.FromHexString("CCF9199DC7E8B49F7BA424B9AEF10B030944597701C6E4632B4771BC964AB693"),       
+        InverseQ = System.Convert.FromHexString("2A9786C0880E08743CA576930210D35600530974452AF21982126B8C87D10BA748058BB4AEC67775B8272C3CAF430DCAE36B048F67428C48343F05C776DE2AF7"),
+        Modulus = System.Convert.FromHexString("DEEBE218CA49F2A3F138F773E92C06B4DE5F94C11D34AA58F5FE02DFA752455C762BF05E1BD6CB73674228DAB9F6CC5E1A3C07BF1E860DEC8D5E3DF87E135069D3C8BFC5297F821D19C70953E99B6363DACEF8367400E068035CF2DAB8A4FCFC8EA96C89F3F9F5AA5D3E584AECE64F0C1C8B853305E42F6C74971F4B6AB01BE1"),
+        P = System.Convert.FromHexString("EE570F78ADBF6F1DAD739AECE464755E058FD34758A5A050A82C6683A2B99CFE77D289C7541F298330DFCD3496E215783C630491C72AE38CE3B6A37C974FD63F"),
+        Q = System.Convert.FromHexString("EF705AD466D7200F8CCF3278375A4DD9BAE5B4D7060DB6CDC100B9554930A7FFE9ECA5DC64A9154E74AD08A000EF9CD4C1BC56F9FAEDC3EF189CE60EDE3AC5DF"),       
     };
 
-    static RSAParameters publicKey = new RSAParameters
+	public static string RSADecrypt(string message)
     {
-        Exponent = System.Convert.FromHexString("010001"),
-        Modulus = System.Convert.FromHexString("C98D2988771B0C1BFDBDA9147026A4B3856E249224DB027FA45BB1F9931E54D165DC63867BA20F67CBAD46C9685849721EE7A74E237C0E0598EA5FA704EA8165"),
-    };
-    
-    public static int Main(string[] args)
-    {
-        if (args.Length != 1)
-        {
-            System.Console.WriteLine("Expected [1] argument, got [{0}].", args.Length);
-            return 1;
-        } else if (args[0] != "encrypt" && args[0] != "decrypt" && args[0] != "1" && args[0] != "2")
-        {
-            System.Console.WriteLine("Please enter either:\n(1) encrypt\n(2) decrypt");
-            return 1;
-        }
-
-        UnicodeEncoding ByteConverter = new UnicodeEncoding();
-
-        if (args[0] == "1" || args[0] == "encrypt")
-        {
-            string plaintext = "";
-
-            while (plaintext == "") {
-                System.Console.Write("Enter a message to encrypt: ");
-                plaintext = Console.ReadLine();
-            }
-
-            RSAEncrypt(ByteConverter.GetBytes(plaintext), Program.publicKey);
-        } else {
-            byte[] recovered = RSADecrypt(Program.privateKey);
-            Console.WriteLine("Recovered plaintext: {0}", Encoding.UTF8.GetString(recovered));
-        }
-
-        return 0;
-    }
-
-    public static void RSAEncrypt(byte[] DataToEncrypt, RSAParameters RSAKeyInfo)
-    {
-        try
-        {
-            byte[] encryptedData;
-
-            // Create a new instance of RSACryptoServiceProvider.
-            using (RSACryptoServiceProvider RSA = new RSACryptoServiceProvider())
-            {
-
-                // Import the RSA Key information. This only needs
-                // to include the public key information.
-                RSA.ImportParameters(RSAKeyInfo);
-
-                // Encrypt the passed byte array and specify OAEP padding.  
-                // OAEP padding is only available on Microsoft Windows XP or
-                // later.  
-                encryptedData = RSA.Encrypt(DataToEncrypt, true);
-            }
-
-            System.IO.File.WriteAllText(FILE_PATH, string.Empty);
-
-            using (StreamWriter sw = File.AppendText(FILE_PATH))
-            {
-                sw.WriteLine(System.Convert.ToHexString(encryptedData));
-            }
-        }
-        catch (CryptographicException e)
-        {
-            Console.WriteLine(e.Message);
-        }
-    }
-
-    public static byte[] RSADecrypt(RSAParameters RSAKeyInfo)
-    {
-        string[] contents = System.IO.File.ReadAllLines(FILE_PATH);
-
         try
         {
             byte[] plaintext;
-            byte[] ciphertext = System.Convert.FromHexString(contents[0]);
+            byte[] ciphertext = System.Convert.FromHexString(message);
 
             // Create a new instance of RSACryptoServiceProvider.
             using (RSACryptoServiceProvider RSA = new RSACryptoServiceProvider())
             {
                 // Import the RSA Key information. This needs
                 // to include the private key information.
-                RSA.ImportParameters(RSAKeyInfo);
+                RSA.ImportParameters(privateKey);
 
                 // Decrypt the passed byte array and specify OAEP padding.  
                 // OAEP padding is only available on Microsoft Windows XP or
                 // later.  
-                //Console.WriteLine(System.Convert.ToHexString(ciphertext));
                 plaintext = RSA.Decrypt(ciphertext, true);
             }
 
-            return plaintext;
+            return Encoding.UTF8.GetString(plaintext);
         }
         // Catch and display a CryptographicException  
         // to the console.
@@ -123,4 +46,107 @@ class Program
             return null;
         }
     }
+
+	static byte[] AESEncrypt(string plaintext, string key, string iv)
+    {
+        byte[] ciphertext;
+
+        // Create an Aes object
+        // with the specified key and IV.
+        using (Aes aesAlg = Aes.Create())
+        {
+            // Create an encryptor to perform the stream transform.
+            ICryptoTransform encryptor = aesAlg.CreateEncryptor(System.Convert.FromHexString(key), System.Convert.FromHexString(iv));
+
+            // Create the streams used for encryption.
+            using (MemoryStream msEncrypt = new MemoryStream())
+            {
+                using (CryptoStream csEncrypt = new CryptoStream(msEncrypt, encryptor, CryptoStreamMode.Write))
+                {
+                    using (StreamWriter swEncrypt = new StreamWriter(csEncrypt))
+                    {
+                        // Write all data to the stream.
+                        swEncrypt.Write(plaintext);
+                    }
+
+                    ciphertext = msEncrypt.ToArray();
+                }
+            }
+        }
+
+		return ciphertext;
+    }
+
+	static void executeClient()
+	{
+		try {
+			// Establish the remote endpoint for the socket
+			IPHostEntry ipHost = Dns.GetHostEntry("localhost");
+			IPAddress ipAddr = ipHost.AddressList[1];
+			IPEndPoint localEndPoint = new IPEndPoint(ipAddr, 8080);
+
+			// Create TCP/IP Socket
+			Socket sender = new Socket(ipAddr.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
+
+			try {
+				// Connect socket to the remote endpoint
+				sender.Connect(localEndPoint);
+				Console.WriteLine("Socket connected to -> {0} ", sender.RemoteEndPoint.ToString());
+
+				// Send public key to server
+				byte[] modulus = Encoding.ASCII.GetBytes("0xDEEBE218CA49F2A3F138F773E92C06B4DE5F94C11D34AA58F5FE02DFA752455C762BF05E1BD6CB73674228DAB9F6CC5E1A3C07BF1E860DEC8D5E3DF87E135069D3C8BFC5297F821D19C70953E99B6363DACEF8367400E068035CF2DAB8A4FCFC8EA96C89F3F9F5AA5D3E584AECE64F0C1C8B853305E42F6C74971F4B6AB01BE1");
+				sender.Send(modulus);
+
+				byte[] exponent = Encoding.ASCII.GetBytes("0x10001");
+				sender.Send(exponent);
+
+				// Data buffer
+				byte[] messageReceived = new byte[1024];
+
+				// Receive symmetric key
+				int bytesRecieved = sender.Receive(messageReceived);
+				// Console.WriteLine("Recieved Key -> {0}", Encoding.ASCII.GetString(messageReceived, 0, byteRecv));
+				string key = RSADecrypt(Encoding.ASCII.GetString(messageReceived, 0, bytesRecieved));
+				// Console.WriteLine("Decrypted Key -> {0}", key);
+
+				// Receive initialization vector
+				bytesRecieved = sender.Receive(messageReceived);
+				// Console.WriteLine("Recieved IV -> {0}", Encoding.ASCII.GetString(messageReceived, 0, byteRecv));
+				string iv = RSADecrypt(Encoding.ASCII.GetString(messageReceived, 0, bytesRecieved));
+				// Console.WriteLine("Decrypted IV -> {0}", iv);
+
+				Console.WriteLine();
+
+				// Indefinitely send messages to the server
+				while (true) {
+					string plaintext = "";
+
+					while (plaintext == "") {
+						Console.Write("-> ");
+						plaintext = Console.ReadLine();
+					}
+
+					byte[] ciphertext = AESEncrypt(plaintext, key, iv);
+					sender.Send(ciphertext);
+				}
+			} catch (ArgumentNullException ane) {
+				Console.WriteLine("ArgumentNullException : {0}", ane.ToString());
+			} catch (SocketException se) {	
+				if (se.ErrorCode == 10054) {
+					Console.WriteLine("Host closed connection.");
+				} else {
+					Console.WriteLine("SocketException : {0}", se.ToString());
+				}
+			} catch (Exception e) {
+				Console.WriteLine("Unexpected exception : {0}", e.ToString());
+			}
+		} catch (Exception e) {
+			Console.WriteLine(e.ToString());
+		}
+	}
+
+	static void Main(string[] args)
+	{
+		executeClient();
+	}
 }
