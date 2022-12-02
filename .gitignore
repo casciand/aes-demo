@@ -1,3 +1,5 @@
+.vscode
+.DS_Store
 cpp/build
 cpp/lib
 csharp/bin

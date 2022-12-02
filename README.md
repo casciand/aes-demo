@@ -20,7 +20,7 @@ dotnet build
 
 ## C++
 
-If on Linux or MacOS:
+If on Linux or macOS:
 
 ```commandline
 cd cpp/lib/cryptopp
@@ -30,7 +30,7 @@ make
 ```commandline
 cd cpp
 mkdir build && cd build
-cmake .
+cmake ..
 make
 ```
 
@@ -47,7 +47,7 @@ cmake --build .
 
 ## C++
 
-Start the server by running the executable in the `cpp\build\Debug` directory (or wherever the executable resides).
+Start the server by running the executable in the `cpp\build` directory (or wherever the executable resides).
 
 ```commandline
 .\cpp.exe
@@ -61,4 +61,4 @@ Start the client by running the following command in the `csharp` directory.
 dotnet run
 ```
 
-After the connection establishes, send encrypted messages to the server from the prompt.
+After the connection establishes, send encrypted messages to and from the server via the prompts.

@@ -83,9 +83,20 @@ public class RSA
 {
     private RSAParameters _key;
 
-    public RSA(RSAParameters key)
+    public RSA()
     {
-        _key = key;
+        using (RSACryptoServiceProvider RSA = new RSACryptoServiceProvider())
+        {
+            _key = RSA.ExportParameters(true);
+        }
+    }
+
+    public string getModulus() {
+        return System.Convert.ToHexString(_key.Modulus);
+    }
+
+    public string getExponent() {
+        return System.Convert.ToHexString(_key.Exponent);
     }
 
     public string decrypt(string message)
